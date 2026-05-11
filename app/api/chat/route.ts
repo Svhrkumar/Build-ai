@@ -40,10 +40,141 @@ Rules:
 - Use Tailwind CSS by default when the user does not specify a styling approach.
 - If the user explicitly requests another styling system or a component library, follow that request instead of Tailwind.
 - Supported overrides include plain CSS, CSS modules, styled JSX, inline styles, Bootstrap, Material UI, MUI, Chakra UI, Ant Design, shadcn/ui, or other clearly requested UI libraries.
+- Build a complete, polished, production-style component rather than a minimal placeholder.
+- Do not return bare text-and-border mockups unless the user explicitly asks for something very plain.
+- Include realistic structure, spacing, hierarchy, states, and visual styling appropriate to the requested component.
+- If the request is for a common UI pattern like a navbar, hero, card, modal, pricing section, or accordion, generate a rich version with sensible content, alignment, hover states, and layout polish.
+- When the request is underspecified, make strong but tasteful design decisions instead of keeping it generic.
+- Avoid overly basic previews like a single dark bar with plain links unless that is explicitly requested.
 - "previewHtml" must be a full HTML document with inline CSS only.
 - "previewHtml" must not load external scripts or assets.
+- "previewHtml" must visually represent the same component described by "code".
+- Make the preview self-contained: no imports, no external fonts, no CDN links, no JavaScript required.
+- Use semantic HTML and inline CSS so the preview renders correctly inside a sandboxed iframe.
+- The preview should fit comfortably in a medium card-sized viewport and avoid overflowing horizontally.
 - Keep the preview self-contained and visually polished.
 `
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
+function buildFallbackPreview(payload: Pick<CodePayload, "assistantMessage" | "code">) {
+  const safeMessage = escapeHtml(payload.assistantMessage || "Generated component preview")
+  const safeCode = escapeHtml(payload.code || "No component code was returned.")
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef6f8 100%);
+        font-family: Inter, Arial, sans-serif;
+        color: #0f172a;
+      }
+      .shell {
+        max-width: 920px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+        padding: 20px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #64748b;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+      p {
+        margin: 12px 0 0;
+        line-height: 1.6;
+        color: #475569;
+      }
+      pre {
+        margin: 0;
+        overflow: auto;
+        border-radius: 18px;
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 16px;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="card">
+        <p class="eyebrow">Preview fallback</p>
+        <h1>${safeMessage}</h1>
+        <p>
+          The AI did not return a complete visual preview, so this fallback is showing the generated
+          component source instead.
+        </p>
+      </section>
+      <section class="card">
+        <p class="eyebrow">Generated code</p>
+        <pre>${safeCode}</pre>
+      </section>
+    </div>
+  </body>
+</html>`
+}
+
+function normalizePreviewHtml(payload: Pick<CodePayload, "assistantMessage" | "code" | "previewHtml">) {
+  const preview = payload.previewHtml.trim()
+
+  if (!preview) {
+    return buildFallbackPreview(payload)
+  }
+
+  const lowerPreview = preview.toLowerCase()
+  const looksLikeHtmlDocument =
+    lowerPreview.includes("<html") &&
+    lowerPreview.includes("<body") &&
+    lowerPreview.includes("</body>") &&
+    lowerPreview.includes("</html>")
+
+  const containsExternalAssets =
+    lowerPreview.includes("<script") ||
+    lowerPreview.includes("http://") ||
+    lowerPreview.includes("https://") ||
+    lowerPreview.includes("//fonts.") ||
+    lowerPreview.includes("@import url")
+
+  if (!looksLikeHtmlDocument || containsExternalAssets) {
+    return buildFallbackPreview(payload)
+  }
+
+  return preview
+}
 
 function extractJsonObject(value: string) {
   const firstBrace = value.indexOf("{")
@@ -166,7 +297,7 @@ export async function POST(request: Request) {
       return Response.json({
         reply: payload.assistantMessage,
         code: payload.code,
-        previewHtml: payload.previewHtml,
+        previewHtml: normalizePreviewHtml(payload),
       })
     }
 
