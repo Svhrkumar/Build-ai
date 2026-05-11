@@ -88,11 +88,20 @@ const codeSkeletonLines = [
 ]
 
 const ChatPage = () => {
-  const [messages, setMessages] = useLocalStorage("chat-messages", [starterMessage])
+  const [messages, setMessages] = useLocalStorage("chat-messages", [starterMessage]) as [
+    ChatMessage[],
+    React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  ]
   const [agentMode, setAgentMode] = useState<"chat" | "code">("chat")
   const [rightPanelTab, setRightPanelTab] = useState<"code" | "preview">("code")
-  const [generatedCode, setGeneratedCode] = useLocalStorage("generated-component-code", starterCode)
-  const [previewHtml, setPreviewHtml] = useLocalStorage("generated-component-preview", starterPreviewHtml)
+  const [generatedCode, setGeneratedCode] = useLocalStorage("generated-component-code", starterCode) as [
+    string,
+    React.Dispatch<React.SetStateAction<string>>,
+  ]
+  const [previewHtml, setPreviewHtml] = useLocalStorage("generated-component-preview", starterPreviewHtml) as [
+    string,
+    React.Dispatch<React.SetStateAction<string>>,
+  ]
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
